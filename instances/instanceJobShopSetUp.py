@@ -7,6 +7,32 @@ from .instance import Instance
 
 
 class InstanceJobShopSetUp(Instance):
+    """
+    Class to manage the instance of the job shop scheduling problem with setup times.
+        attributes:
+            - n_jobs (int): number of jobs (5)
+            - n_machines (int): number of machines (10)
+            - machines_initial_state (list[int]): initial state of the machines (initial_setup.csv)
+            - df_jobs (pd.DataFrame): dataframe with the jobs information (jobs.csv)
+            - df_setup_job (pd.DataFrame): dataframe with the setup information (setup.csv)
+            - lst_job (list[list[dict]]): list of jobs, each job is a list of 
+                        dictionaries with the machine and the processing time (operations.csv)
+            - op_from_j_m (np.array): contains the number of the operation given the job and the machine, -1 if machine is not used for the job
+            - jobs_on_machine (list[list[int]]): contains all the jobs to be done on a machine
+            - n_ops (list[int]): number of operations for each job
+            - jobs (dict): contains the jobs information 
+            - operations_forest (nx.DiGraph): graph with the operations 
+            - df_operations (pd.DataFrame): dataframe with the operations information
+            - df_setup (pd.DataFrame): dataframe with the setup information (setup.csv)
+            - lst_operations (list): list of operations each operation is a tuple (op, job)
+            - eligible_machines (dict): eligible machines for each operation
+            - starting_ops (list): starting operations
+
+        methods:
+            - get_setup(m, j0, j1): get the setup time between two jobs on a machine
+            - plot_operations_forest(): plot the operations forest
+    """
+
     def __init__(self, n_jobs, n_machines, machines_initial_state, df_jobs, df_setup_job, lst_job):
         super(InstanceJobShopSetUp, self).__init__(n_jobs, n_machines)
         self.machines_initial_state = machines_initial_state
