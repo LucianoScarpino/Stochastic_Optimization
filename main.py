@@ -5,8 +5,6 @@ import logging
 from envs import *
 from agents import *
 from data_interfaces import read_jit_jss_setup_instances
-
-
 if __name__ == "__main__":
     log_name = os.path.join(
         '.', 'logs',
@@ -25,11 +23,18 @@ if __name__ == "__main__":
     # read static data
     inst = read_jit_jss_setup_instances(path_file)
     # create dynamic environment
-    env = ShopFloor(inst)
+    gantt_plotter = GanttCharts(img_dir='gantt_images')
+
+    env = ShopFloor(inst, gantt_plotter)
     # create agent
     agent = EddAgent()
     # compute schedule
     schedule = agent.get_schedule(env)
-    # simulate schedule
-    obj_function = env.simulate_scheduling(schedule)
+    # render gannt chart
+    env.render_gantt_chart()
+
+    #simulate schedule
+    obj_function = env.simulate_scheduling(schedule, plot_gantt=True)    
+    print(f"Objective function value: {obj_function}")
+    gantt_plotter.construct_animation(failure_prob=env.failure_prob)
 
