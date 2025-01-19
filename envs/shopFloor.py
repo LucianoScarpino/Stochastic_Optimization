@@ -6,6 +6,7 @@ from matplotlib.animation import FuncAnimation
 from pathlib import Path
 from PIL import Image
 import os
+from matplotlib.offsetbox import AnchoredText
 
 class ShopFloor(gym.Env):
     """States of the environment:
@@ -37,9 +38,12 @@ class ShopFloor(gym.Env):
             image_folder: The folder to store the images of the Gantt charts
             failure_prob: The probability of a machine failure
     """
-    def __init__(self, prb_instance, gant_plotter, image_folder='images', failure_prob=0.0):
+    def __init__(self, prb_instance, gantt_plotter, agent, priority_rule,
+                 image_folder='images', failure_prob=0.0):
         self.prb_instance = prb_instance
-        self.gant_plotter = gant_plotter
+        self.gantt_plotter = gantt_plotter
+        self.priority_rule = priority_rule
+        self.agent = agent
         self.image_folder = image_folder
         self.failure_prob = failure_prob
         self.state = self.get_state_space()
@@ -58,9 +62,8 @@ class ShopFloor(gym.Env):
         """
         num_epochs = 0
         self.initialize_simulation(schedule)
-        if plot_gantt:
-            self.render_gantt_chart(img_name=f'epoch_{num_epochs}')
         while not self.is_finished():
+        #for _ in range(90):
             num_epochs += 1
             next_time_epoch, event_type = self.get_next_time_epoch()
             self.current_time = next_time_epoch
@@ -68,16 +71,42 @@ class ShopFloor(gym.Env):
                 self.start_operations(next_time_epoch)
             elif event_type == 'finish':
                 succes, time_step = self.finish_operations(next_time_epoch)
-                self.state['current_time'] += time_step # If the next event is a finish fast forward the time
+                self.state['current_time'] += time_step # Update the current time
                 if not succes:
                     self.reschedule(next_time_epoch)
             self.state['current_time'] = next_time_epoch
             if plot_gantt:
-                self.gant_plotter.render_gantt_chart(self, img_name=f'epoch_{num_epochs}')
+                self.render_gantt_chart(f"epoch_{num_epochs}", with_caption=True)
         obj_func = self.compute_objective_function()
         print(f"Objective function value after {num_epochs} epochs: {obj_func}")
         return obj_func
     
+    def render_gantt_chart(self, img_name: str, with_caption: bool = True) -> None:
+        """ Render the current state of the environment as a Gantt chart """
+        caption = f"Failure probability: {self.failure_prob}, Priority rule: {self.priority_rule}"
+        if not with_caption:
+            caption = None
+        self.gantt_plotter.generate_gantt_chart(self, img_name, caption)
+
+
+    def reschedule(self, time_stamp) -> None:
+        """ Reschedule the operations that are still pending """
+        # Clear all pending operations from the schedule
+        # Save the job state and machine state
+        job_state_ = self.state['job_state'].copy()
+        machine_state_ = self.state['machine_state'].copy()
+
+        pending_ops = self.state['schedule_state'][:, :, 3] == 0
+        self.state['schedule_state'][pending_ops] = [0, 0, 0, 0]        
+        new_schedule = self.agent.get_schedule(self)
+
+        # Restore the job state and machine state
+        self.state['current_time'] = time_stamp
+        self.state['job_state'] = job_state_
+        self.state['machine_state'] = machine_state_
+        self.state['schedule_state'] = new_schedule
+        return None
+
     def compute_objective_function(self) -> float:
         """ Compute the objective function of the final schedule.
             obj(schedule) = sum_{j} w_E * E_j + w_T * T_j + w_F(C_j - S_1)
@@ -119,13 +148,15 @@ class ShopFloor(gym.Env):
                 succes (bool): True if the operation was successfully completed, False otherwise
                 time_step (float): The time step until the next event
         """
+        succes = True
         # Find the machines that are finishing an operation
         machine_idxs = np.where(self.state['machine_state'][:, 1] == next_time_epoch - self.state['current_time'])[0]
         job_idxs = self.state['machine_state'][machine_idxs, 0]
         op_idxs = self.state['job_state'][job_idxs, 0]
 
         for job_id, op_id in zip(job_idxs, op_idxs):
-            if np.random.rand() > self.failure_prob:
+            if np.random.rand() > self.failure_prob: # Operation is successful
+                self.state['job_state'][job_id, 1] = 0
                 if op_id == self.prb_instance.n_ops[job_id] - 1:
                     self.state['job_state'][job_id, 0] = -1
                 else:
@@ -133,12 +164,15 @@ class ShopFloor(gym.Env):
                 
                 self.state['schedule_state'][job_id, op_id, 3] = 2
             else:
-                return NotImplementedError, 'A machine failure needs to be implemented'
-        
+                # Mark the operation as failed 
+                self.state['schedule_state'][job_id, op_id, 3] = 0
+                self.state['job_state'][job_id, 1] = 0
+                succes = False
+
         # Reset the machine state
         time_step = next_time_epoch - self.state['current_time']
         self.state['machine_state'][:, 1] = np.maximum(0, self.state['machine_state'][:, 1] - time_step)
-        return True, time_step
+        return succes, time_step
 
     def is_finished(self) -> bool:
         """ Check if all the operations have been completed """
@@ -264,62 +298,6 @@ class ShopFloor(gym.Env):
         }
         return state
 
-    def render_gantt_chart(self, img_name: str = None):
-        """ Render the current state of the environment as a gannt chart """
-        path = f'{self.image_folder}/image_{img_name}.png'
-
-        current_schedule = self.state['schedule_state']
-        n_machines = self.prb_instance.n_machines
-        n_jobs = self.prb_instance.n_jobs
-
-        # Compute the longest completion time for x-axis 
-        current_time = 0
-        for job in current_schedule:
-            for op in job:
-                if np.all(op != [-1, -1, -1, -1]):
-                    completion_time = op[0] + op[1]
-                    current_time = max(current_time, completion_time)
-        x_axis_limit = current_time + 10
-        cmap = plt.cm.get_cmap('tab10')
-        job_colors = [cmap(i) for i in range(n_jobs)]
-        alpha_map = {0: 0.3, 1: 0.7, 2: 1.0}
-        status_map = {0: 'P', 1: 'S', 2: 'C'} # Pending, Scheduled, Completed
-
-        # Initialize the figure
-        fig, gnt = plt.subplots(figsize=(12, 5))
-        gnt.set_ylim(0, n_machines*10 + 10)
-        gnt.set_xlim(0, x_axis_limit)
-        gnt.set_xlabel('Time')
-        gnt.set_ylabel('Machine')
-        gnt.set_yticks([5 + 10*i + 4.5 for i in range(n_machines)])
-        gnt.set_yticklabels([f'M: {i}' for i in range(n_machines)])
-        gnt.grid(True)
-
-        # Add the bars for each operation
-        for job_idx, job in enumerate(current_schedule):
-            for op_idx, (start, duration, machine_idx, status) in enumerate(job):
-                if np.all([start, duration, machine_idx, status] != [-1, -1, -1, -1]):
-                    gnt.broken_barh([(start, duration)], (5+10*machine_idx, 9), facecolors=job_colors[job_idx],
-                                    alpha=alpha_map[status])
-                    # Add a label at the center of each bar
-                    text = f'o{op_idx}_{status_map[status]}'
-                    #text = f'op{op_idx}_F' if is_finished else f'op{op_idx}_S'
-                    if duration > 0:
-                        gnt.text(start + duration/2, 5+10*machine_idx + 4.5,
-                                text, color='black', fontsize=8, ha='center', va='center')    
-                
-        # Add a legend for the jobs
-        job_legend_patches = [mpatches.Patch(color=job_colors[i], label=f'Job{i}') for i in range(n_jobs)]
-        gnt.legend(handles=job_legend_patches, loc='center right', bbox_to_anchor=(1.10, 0.85))
-        
-        # Add a vertical line for the current time    
-        current_timestamp = self.state["current_time"]  # Assuming the current timestamp is stored in the state
-        gnt.axvline(current_timestamp, color='red', linestyle='--', label='Current Time')
-
-        plt.title(f'P: Pending, S: Scheduled, C: Completed')
-        
-        plt.savefig(path)
-
 class GanttCharts(object):
     """ Class for rendering Gantt charts """
 
@@ -331,7 +309,7 @@ class GanttCharts(object):
             if file.endswith(".png"):
                 os.remove(os.path.join(self.img_dir, file))
 
-    def render_gantt_chart(self, env, img_name: str = None):
+    def generate_gantt_chart(self, env, img_name: str = None, caption: str = None) -> None:
         """ Render the current state of the environment as a gannt chart:
             args:
                 env: The environment (see envs/shopFloor.py)
@@ -386,14 +364,20 @@ class GanttCharts(object):
         # Add a vertical line for the current time    
         current_timestamp = env.state["current_time"]  # Assuming the current timestamp is stored in the state
         gnt.axvline(current_timestamp, color='red', linestyle='--', label='Current Time')
-
-        plt.title(f'P: Pending, S: Scheduled, C: Completed')
         
+        if caption:
+            plt.title(caption + f'\n P: Pending, S: Scheduled, C: Completed')
+        else:
+            plt.title(f'P: Pending, S: Scheduled, C: Completed')
+
+
+
+        # Save the figure
         plt.savefig(path)
     
     def construct_animation(self, failure_prob: float,
                             fps: int = 1, interval: int = 750, 
-                            delete_imgs: bool = False) -> None:
+                            clear_img_folder: bool = False) -> None:
         """ Save an animation from a folder of images."""
         image_files = sorted([os.path.join(self.img_dir, file) for file in os.listdir(self.img_dir) if file.endswith(".png")],
                              key=lambda x: int(x.split('_')[-1].split('.')[0]))
@@ -415,7 +399,7 @@ class GanttCharts(object):
         output_file = f'{dir}/animation_failure_prob_{failure_prob}'
         ani.save(f'{output_file}.gif', writer="pillow", fps=fps)
 
-        if delete_imgs:
+        if clear_img_folder:
             for img in image_files:
                 os.remove(img)
         return None

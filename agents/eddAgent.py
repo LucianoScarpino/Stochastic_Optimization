@@ -7,7 +7,7 @@ class EddAgent(JobShopScheduler):
 
     def get_schedule(self, env):
         """ Schedule the jobs using the earliest due date rule """
-    
+        max_iter = 1000
         while self.all_jobs_scheduled(env):
             due_dates = env.prb_instance.df_jobs['due_date'].values
             priorities = np.argsort(due_dates)
@@ -21,4 +21,8 @@ class EddAgent(JobShopScheduler):
                         break
             # Fast forward the environment to the next event
             env = self.fast_forward_to_next_event(env)
+            max_iter -= 1
+            if max_iter == 0:
+                print("Max iterations reached")
+                return None
         return env.state['schedule_state']
