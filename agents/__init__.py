@@ -1,6 +1,6 @@
-from .eddAgent import EddAgent
-
+from .eddAgent import EddAgent, JobShopScheduler
 
 __all__ = [
-    'EddAgent'
+    'EddAgent',
+    'JobShopScheduler'
 ]
