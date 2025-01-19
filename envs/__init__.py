@@ -1,5 +1,6 @@
-from .shopFloor import ShopFloor
+from .shopFloor import ShopFloor, GanttCharts
 
 __all__ = [
-    'ShopFloor'
+    'ShopFloor',
+    'GanttCharts'
 ]
