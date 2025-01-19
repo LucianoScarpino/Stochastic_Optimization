@@ -3,3 +3,5 @@ __pycache__/
 *.pyo
 local/
 *.png
+.DS_Store
+logs/
