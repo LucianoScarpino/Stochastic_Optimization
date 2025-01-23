@@ -76,7 +76,7 @@ class ShopFloor(gym.Env):
                     self.reschedule(next_time_epoch)
             self.state['current_time'] = next_time_epoch
             if plot_gantt:
-                self.render_gantt_chart(f"epoch_{num_epochs}", with_caption=True)
+                self.render_gantt_chart(f"epoch_{num_epochs}", with_caption=True)               #usa questa se vuoi controllare che schedula lavora bene.
         obj_func = self.compute_objective_function()
         print(f"Objective function value after {num_epochs} epochs: {obj_func}")
         return obj_func
@@ -98,7 +98,7 @@ class ShopFloor(gym.Env):
 
         pending_ops = self.state['schedule_state'][:, :, 3] == 0
         self.state['schedule_state'][pending_ops] = [0, 0, 0, 0]        
-        new_schedule = self.agent.get_schedule(self)
+        new_schedule = self.agent.get_schedule(self)                                #Il nostro codice entra qui
 
         # Restore the job state and machine state
         self.state['current_time'] = time_stamp
