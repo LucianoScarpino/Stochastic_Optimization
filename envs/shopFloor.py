@@ -85,7 +85,7 @@ class ShopFloor(gym.Env):
                     self.reschedule(next_time_epoch)
             self.state['current_time'] = next_time_epoch
             if plot_gantt:
-                self.render_gantt_chart(f"epoch_{num_epochs}", with_caption=True)               #usa questa se vuoi controllare che schedula lavora bene.
+                self.render_gantt_chart(f"epoch_{num_epochs}", with_caption=True)              
         obj_func = self.compute_objective_function()
         return obj_func
     
@@ -106,7 +106,7 @@ class ShopFloor(gym.Env):
 
         pending_ops = self.state['schedule_state'][:, :, 3] == 0
         self.state['schedule_state'][pending_ops] = [0, 0, 0, 0]        
-        new_schedule = self.agent.get_schedule(self)                                #Il nostro codice entra qui
+        new_schedule = self.agent.get_schedule(self)                                
 
         # Restore the job state and machine state
         self.state['current_time'] = time_stamp
@@ -131,7 +131,6 @@ class ShopFloor(gym.Env):
         obj_func = 0
         n_ops = [ops - 1 for ops in self.prb_instance.n_ops]
         start_times = self.state['schedule_state'][:, 0, 0]
-        # start_times = np.min(self.state['schedule_state'][:, 0, 0])
 
         completions_times = []
         for job_idx in range(self.prb_instance.n_jobs):
@@ -362,7 +361,6 @@ class GanttCharts(object):
                                     alpha=alpha_map[status])
                     # Add a label at the center of each bar
                     text = f'o{op_idx}_{status_map[status]}'
-                    #text = f'op{op_idx}_F' if is_finished else f'op{op_idx}_S'
                     if duration > 0:
                         gnt.text(start + duration/2, 5+10*machine_idx + 4.5,
                                 text, color='black', fontsize=8, ha='center', va='center')    
@@ -385,7 +383,7 @@ class GanttCharts(object):
         # Save the figure
         plt.savefig(path)
     
-    def construct_animation(self, failure_prob: float,
+    def construct_animation(self, failure_prob: float, priority_rule: str,
                             fps: int = 1, interval: int = 750, 
                             clear_img_folder: bool = False) -> None:
         """ Save an animation from a folder of images."""
@@ -406,7 +404,7 @@ class GanttCharts(object):
         ani = FuncAnimation(fig, update, frames=len(image_files), interval=interval, blit=True)
         dir = 'animations'
         Path(dir).mkdir(parents=True, exist_ok=True)    
-        output_file = f'{dir}/animation_failure_prob_{failure_prob}'
+        output_file = f'{dir}/{priority_rule}_failure_{failure_prob}'
         ani.save(f'{output_file}.gif', writer="pillow", fps=fps)
 
         if clear_img_folder:
