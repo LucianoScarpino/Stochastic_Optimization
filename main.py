@@ -47,10 +47,10 @@ def init_main(args: argparse.Namespace) -> ShopFloor:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--priority_rule", type=str, default="edd", 
+    parser.add_argument("--priority_rule", type=str, default="edd",                                 #qui metti le priorità
                         choices = ['edd', 'lpt', 'spt', 'wspt', 'atcs', 'msf'],
                         help="The priority rule to be used for the scheduling")
-    parser.add_argument("--failure_prob", type=float, default=0.05)
+    parser.add_argument("--failure_prob", type=float, default=0.0)
     parser.add_argument("--clear_imgs", action='store_true', help="Clear the gantt charts when creating the animation")
     parser.add_argument("--N", type=int, default=100, help="Number of iterations for the simulation")
     args = parser.parse_args()
