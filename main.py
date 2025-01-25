@@ -6,6 +6,10 @@ from envs import *
 from agents import *
 from data_interfaces import read_jit_jss_setup_instances
 import argparse
+import numpy as np
+from tqdm import tqdm
+import matplotlib.pyplot as plt
+import multiprocessing as mp    
 
 ## Add more agents here. Uncomment when implemented
 priority_to_agent = {
@@ -48,16 +52,27 @@ if __name__ == "__main__":
                         help="The priority rule to be used for the scheduling")
     parser.add_argument("--failure_prob", type=float, default=0.05)
     parser.add_argument("--clear_imgs", action='store_true', help="Clear the gantt charts when creating the animation")
+    parser.add_argument("--N", type=int, default=100, help="Number of iterations for the simulation")
     args = parser.parse_args()
 
     # 1) Initialize the environment, agent and compute the initial schedule
-    env = init_main(args)
-    schedule = env.agent.get_schedule(env)
 
     # 2) Simulate the scheduling
-    obj_function = env.simulate_scheduling(schedule, plot_gantt=True)    
-    print(f"Objective function value: {obj_function}")
+    obj_values_estimate = np.zeros(args.N)
+    for i in tqdm(range(args.N), desc="Simulating scheduling"):
+        obj_values = np.zeros(i)
+        for idx in range(i):
+            env = init_main(args)
+            schedule = env.agent.get_schedule(env)
+            obj_function = env.simulate_scheduling(schedule, plot_gantt=args.N == 1)
+            obj_values[idx] = obj_function
+        obj_values_estimate[i] = np.mean(obj_values)
+    # Plot objective function values as a function of the iteration
+    plt.plot(obj_values)
+    plt.xlabel('Iteration')
+    plt.ylabel('Objective function value')
+    plt.savefig('objective_function.png')
 
     # 3) Construct the animation
-    env.gantt_plotter.construct_animation(failure_prob=env.failure_prob, interval=1400, clear_img_folder=args.clear_imgs)
-
+    if args.N == 1:
+        env.gantt_plotter.construct_animation(failure_prob=env.failure_prob, interval=1400, clear_img_folder=args.clear_imgs)

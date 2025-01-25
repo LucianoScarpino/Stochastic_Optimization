@@ -6,7 +6,6 @@ from matplotlib.animation import FuncAnimation
 from pathlib import Path
 from PIL import Image
 import os
-from matplotlib.offsetbox import AnchoredText
 
 class ShopFloor(gym.Env):
     """States of the environment:
@@ -35,17 +34,28 @@ class ShopFloor(gym.Env):
         args:
             prb_instance: The problem instance (see data_interfaces.py)
             gant_plotter: The Gantt plotter object (see GanttCharts)
-            image_folder: The folder to store the images of the Gantt charts
-            failure_prob: The probability of a machine failure
+            image_folder: str, The folder to store the images of the Gantt charts
+            failure_prob: float, The probability of a machine failure
+            use_predifined_failures: bool, use a set of predefined failures
     """
     def __init__(self, prb_instance, gantt_plotter, agent, priority_rule,
-                 image_folder='images', failure_prob=0.0):
+                 image_folder='images', failure_prob=0.0, use_predifined_failures=False):
         self.prb_instance = prb_instance
         self.gantt_plotter = gantt_plotter
         self.priority_rule = priority_rule
         self.agent = agent
         self.image_folder = image_folder
         self.failure_prob = failure_prob
+        if use_predifined_failures:
+            # Binary dictionary mapping each operation (job_idx, machine_idx) to a succes variable
+            self.failures = {
+                (job_idx, machine_idx): np.random.rand() > failure_prob # Succes(true) or failure(false)
+                for job_idx in range(prb_instance.n_jobs)
+                for machine_idx in range(prb_instance.n_machines)
+            }
+        else:
+            self.failures = None
+
         self.state = self.get_state_space()
         self.state = self.reset()
 
@@ -58,12 +68,11 @@ class ShopFloor(gym.Env):
                 - schedule[job_idx, op_idx]: [start, duration, machine_idx, status]
             plot_progress (bool): If True, plot the progress of the simulation
         Returns:
-            obj_func (float): The objective function value of the schedule
+            obj_func (float): The objective function value of the final schedule
         """
         num_epochs = 0
         self.initialize_simulation(schedule)
         while not self.is_finished():
-        #for _ in range(90):
             num_epochs += 1
             next_time_epoch, event_type = self.get_next_time_epoch()
             self.current_time = next_time_epoch
@@ -76,9 +85,10 @@ class ShopFloor(gym.Env):
                     self.reschedule(next_time_epoch)
             self.state['current_time'] = next_time_epoch
             if plot_gantt:
-                self.render_gantt_chart(f"epoch_{num_epochs}", with_caption=True)
+                self.render_gantt_chart(f"epoch_{num_epochs}", with_caption=False)
+            if num_epochs == 15:
+                self.failure_prob = 0.5
         obj_func = self.compute_objective_function()
-        print(f"Objective function value after {num_epochs} epochs: {obj_func}")
         return obj_func
     
     def render_gantt_chart(self, img_name: str, with_caption: bool = True) -> None:
@@ -122,7 +132,8 @@ class ShopFloor(gym.Env):
         """
         obj_func = 0
         n_ops = [ops - 1 for ops in self.prb_instance.n_ops]
-        S_1 = np.min(self.state['schedule_state'][:, 0, 0])
+        start_times = self.state['schedule_state'][:, 0, 0]
+        # start_times = np.min(self.state['schedule_state'][:, 0, 0])
 
         completions_times = []
         for job_idx in range(self.prb_instance.n_jobs):
@@ -130,7 +141,7 @@ class ShopFloor(gym.Env):
             duration_n = self.state['schedule_state'][job_idx, n_ops[job_idx], 1] # Duration of the last operation
             completions_times.append(start_n + duration_n)
 
-        for job_idx, c_j in enumerate(completions_times):
+        for job_idx, (c_j,s1) in enumerate(zip(completions_times, start_times)):
             job_data = self.prb_instance.df_jobs
             d_j = job_data['due_date'][job_idx]
             E_j = max(0, d_j - c_j)
@@ -139,7 +150,7 @@ class ShopFloor(gym.Env):
             w_E = job_data['earliness_penalty'][job_idx]
             w_T = job_data['tardiness_penalty'][job_idx]
             w_F = job_data['flow_time_penalty'][job_idx]
-            obj_func += w_E * E_j + w_T * T_j + w_F * (c_j - S_1)
+            obj_func += w_E * E_j + w_T * T_j + w_F * (c_j - s1)
         return obj_func
 
     def finish_operations(self, next_time_epoch: float) -> tuple[bool , int]:
@@ -256,21 +267,22 @@ class ShopFloor(gym.Env):
     def get_state_space(self) -> gym.spaces.Dict:
         """ Return the state space of the environment """
         n_jobs = self.prb_instance.n_jobs
+        max_ops = max(self.prb_instance.n_ops)
         n_machines = self.prb_instance.n_machines   
         state_space = gym.spaces.Dict({
             'job_state': gym.spaces.Box(
-                low=np.tile([-1, 0], (n_jobs, 1)),  # Repeat [-1, 0] for each job
-                high=np.tile([n_jobs, 1], (n_jobs, 1)),  # Repeat [n_jobs, 1] for each job
+                low=np.tile(np.array([-1, 0], dtype=np.int32), (n_jobs, 1)),  # Repeat [-1, 0] for each job
+                high=np.tile(np.array([max_ops-1, 1], dtype=np.int32), (n_jobs, 1)),  # Repeat [n_jobs, 1] for each job
                 dtype=np.int32
             ),
             'machine_state': gym.spaces.Box(
-                low=np.tile([-1, 0], (n_machines, 1)),  # Repeat [-1, 0] for each machine
-                high=np.tile([n_jobs, np.inf], (n_machines, 1)),  # Repeat [n_jobs, inf] for each machine
+                low=np.tile(np.array([-1, 0], dtype=np.int32), (n_machines, 1)),  # Repeat [-1, 0] for each machine
+                high=np.tile(np.array([n_jobs, 10**6], dtype=np.int32), (n_machines, 1)),  # Repeat [n_jobs, inf] for each machine
                 dtype=np.float32  # Use float32 since we include `np.inf`
             ),
             'schedule_state': gym.spaces.Box(
-                low=np.tile([-1, -1, -1, -1], (n_jobs, n_machines, 1)),  # Match shape (n_jobs, n_machines, 4)
-                high=np.tile([np.inf, np.inf, n_machines, 2], (n_jobs, n_machines, 1)),  # Match shape
+                low=np.tile(np.array([-1, -1, -1, -1], dtype=np.int32), (n_jobs, n_machines, 1)),  # Match shape (n_jobs, n_machines, 4)
+                high=np.tile(np.array([10**6, 10**6, n_machines, 2], dtype=np.int32), (n_jobs, n_machines, 1)),  # Match shape
                 dtype=np.float32
             ),
             'current_time': gym.spaces.Discrete(1)  # Current time as a discrete value
