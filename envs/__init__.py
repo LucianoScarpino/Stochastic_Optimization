@@ -1,6 +1,8 @@
-from .shopFloor import ShopFloor, GanttCharts
-
+from .shopFloorEnvironment import ShopFloorEnvironment
+from .shopFloorSimulation import ShopFloorSimulation
+from .shopFloorGantt import GanttCharts
 __all__ = [
-    'ShopFloor',
+    'ShopFloorEnvironment',
+    'ShopFloorSimulation',
     'GanttCharts'
 ]

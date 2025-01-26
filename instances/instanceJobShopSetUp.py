@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 import networkx as nx
 from .instance import Instance
 
-
 class InstanceJobShopSetUp(Instance):
     """
     Class to manage the instance of the job shop scheduling problem with setup times.
@@ -27,7 +26,6 @@ class InstanceJobShopSetUp(Instance):
             - lst_operations (list): list of operations each operation is a tuple (op, job)
             - eligible_machines (dict): eligible machines for each operation
             - starting_ops (list): starting operations
-
         methods:
             - get_setup(m, j0, j1): get the setup time between two jobs on a machine
             - plot_operations_forest(): plot the operations forest

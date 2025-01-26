@@ -1,8 +1,7 @@
-from .eddAgent import EddAgent, JobShopScheduler
-from .agents2 import DynamicAgent, StaticAgent
+from .scheduler import JobShopScheduler
+from .agents import DynamicAgent, StaticAgent
 
 __all__ = [
-    'EddAgent',
     'JobShopScheduler',
     'DynamicAgent',
     'StaticAgent'
