@@ -8,6 +8,30 @@ import argparse
 import numpy as np
 from tqdm import tqdm
 
+def mean_std_ci(obj_values: np.ndarray, alpha: float = 0.05) -> tuple[float, float, tuple[float, float]]:
+    """
+    Compute descriptive statistics for the objective values obtained across scenarios.
+
+    Args:
+        obj_values (np.ndarray): Array of objective function values, one per scenario.
+        alpha (float): Significance level for the confidence interval (default 0.05).
+
+    Returns:
+        mean (float): Mean objective value.
+        std (float): Standard deviation of objective values.
+        ci (tuple[float,float]): Lower and upper bounds of the (1-alpha) confidence interval,
+                                 using normal approximation (z≈1.96).
+    """
+    obj_values = np.asarray(obj_values, dtype=float)
+    n = len(obj_values)
+    m = float(np.mean(obj_values)) if n else float('nan')
+    s = float(np.std(obj_values, ddof=1)) if n > 1 else 0.0
+    if n <= 1:
+        return m, s, (m, m)
+    z = 1.96
+    half = z * s / np.sqrt(n)
+    return m, s, (m - half, m + half)
+
 def init_main(args: argparse.Namespace) -> ShopFloorSimulation:
     path_file = os.path.join(
         '.', 'data',
@@ -26,7 +50,7 @@ def init_main(args: argparse.Namespace) -> ShopFloorSimulation:
     env = ShopFloorSimulation(inst, agent, failure_prob=args.failure_prob)
     return env
 
-if __name__ == "__main__":
+def run(priority_rule=None,failure_prob=None,scenario_file=None,test=False):
     parser = argparse.ArgumentParser()
     parser.add_argument("--priority_rule", type=str, default="edd",                                 
                         choices = ['edd', 'lpt', 'spt', 'wspt', 'atcs', 'msf'],
@@ -39,6 +63,13 @@ if __name__ == "__main__":
     parser.add_argument("--base_seed", type=int, default=12345,
                         help="Base seed used to generate scenario seeds when --scenario_file is not provided.")
     args = parser.parse_args()
+
+    if priority_rule != None and test == True:
+        args.priority_rule = priority_rule
+    if failure_prob != None and test == True:
+        args.failure_prob = failure_prob
+    if scenario_file != None and test == True:
+        args.scenario_file = scenario_file
 
     # Check scenario_file name for n consistency
     if args.scenario_file:
@@ -75,7 +106,16 @@ if __name__ == "__main__":
         last_scenario = (i == args.n - 1)
         obj_function = env.simulate_scheduling(schedule, plot_gantt=last_scenario)
         obj_values[i] = obj_function
-    print(f"Estimated objective function value: {np.mean(obj_values)}")
+
+    # Generate metrics
+    mean_obj,std_obj,I_obj = mean_std_ci(obj_values)
+    print(f"Estimated objective function value: {mean_obj}")
 
     # 3) Construct the animation
     env.gantt_plotter.construct_animation(args.failure_prob, args.priority_rule)
+
+    if test == True:
+        return mean_obj,std_obj,I_obj
+
+if __name__ == "__main__":
+    run()
