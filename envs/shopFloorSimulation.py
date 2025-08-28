@@ -19,8 +19,8 @@ class ShopFloorSimulation(ShopFloorEnvironment):
         self.priority_rule = agent.priority_rule
         self.agent = agent
         self.failure_prob = failure_prob
-        self.state = self.get_state_space()
-        self.state = self.reset()
+        self.state = self.get_state_space()     # Initialize space
+        self.state = self.reset()               # Fill initial space with values
     
     def simulate_scheduling(self, schedule: np.ndarray, plot_gantt=True, caption: str = None) -> float:
         """ Simulate the scheduling of the jobs.

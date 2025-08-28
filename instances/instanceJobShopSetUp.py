@@ -103,7 +103,6 @@ class InstanceJobShopSetUp(Instance):
                 }
             )
         self.df_setup = pd.DataFrame.from_dict(setups_tmp)
-        # COMUNE A TUTTE LE INSTANCE:
         self.lst_operations = list(self.df_operations.op.unique())
         # Eligible machine: key op -> list of machines
         self.eligible_machines = {}

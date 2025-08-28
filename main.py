@@ -1,15 +1,12 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 import os
-import logging
 from envs import *
 from agents import *
-from data_interfaces import read_jit_jss_setup_instances
+from data_interfaces import *
 import argparse
 import numpy as np
 from tqdm import tqdm
-import matplotlib.pyplot as plt
-import json
 
 def init_main(args: argparse.Namespace) -> ShopFloorSimulation:
     path_file = os.path.join(
@@ -36,13 +33,24 @@ if __name__ == "__main__":
                         help="The priority rule to be used for the scheduling")
     parser.add_argument("--failure_prob", type=float, default=0.1)
     parser.add_argument("--n", type=int, default=1, help="Number of iterations for the simulation")
+    parser.add_argument("--scenario_file", type=str, default=None,
+                        help="Path to a JSON file containing scenario seeds (for CRN). If not provided, a new set is generated.")
+    parser.add_argument("--base_seed", type=int, default=12345,
+                        help="Base seed used to generate scenario seeds when --scenario_file is not provided.")
     args = parser.parse_args()
 
-    # 1) Initialize the environment
+    if args.scenario_file and os.path.isfile(args.scenario_file):
+        scen_set = ScenarioGenerator.load(args.scenario_file)
+    else:
+        scen_set = ScenarioGenerator(n=args.n, base_seed=args.base_seed).generate()
+        # Save scenarios if a path was provided (enables reuse across rules for CRN)
+        if args.scenario_file:
+            ScenarioGenerator.save(args.scenario_file, scen_set)
 
+    # 1) Initialize the environment
     # 2) Simulate the scheduling
     obj_values = np.zeros(args.n)
-    for i in tqdm(range(args.n), desc="Simulating scheduling"):
+    for i in tqdm(range(args.n), desc="Simulating scheduling"):         #tqdm for bar visualization
         env = init_main(args)
         schedule = env.agent.get_schedule(env)
         obj_function = env.simulate_scheduling(schedule, plot_gantt=(i == args.n-1)) # Plot the last simulation
