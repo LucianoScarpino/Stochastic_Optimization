@@ -41,7 +41,7 @@ def store_results(results,reduction=False):
 
 if __name__ == "__main__":
     # Set test parameters
-    scenario_file = "./data/scenarios/test_scenario_50.json"
+    scenario_file = "./data/scenarios/test_scenario_20.json"
     rules = ['edd', 'lpt', 'spt', 'wspt', 'atcs', 'msf']
     failure_probs = [0.1,0.2,0.3]
     
