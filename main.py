@@ -34,10 +34,24 @@ if __name__ == "__main__":
     parser.add_argument("--failure_prob", type=float, default=0.1)
     parser.add_argument("--n", type=int, default=1, help="Number of iterations for the simulation")
     parser.add_argument("--scenario_file", type=str, default=None,
-                        help="Path to a JSON file containing scenario seeds (for CRN). If not provided, a new set is generated.")
+                        help="Path to a JSON file containing scenario seeds (for CRN). If not provided, a new set is generated." \
+                             "use ./data/scenarios/name_scenario.json")
     parser.add_argument("--base_seed", type=int, default=12345,
                         help="Base seed used to generate scenario seeds when --scenario_file is not provided.")
     args = parser.parse_args()
+
+    # Check scenario_file name for n consistency
+    if args.scenario_file:
+        base = os.path.basename(args.scenario_file)
+        name, ext = os.path.splitext(base)
+        parts = name.split("_")
+        if len(parts) > 1:
+            last_part = parts[-1]
+            if last_part.isdigit():
+                scen_n = int(last_part)
+                if scen_n != args.n:
+                    print(f"[INFO] Overriding --n: using n={scen_n} from scenario file name instead of n={args.n}")
+                    args.n = scen_n
 
     if args.scenario_file and os.path.isfile(args.scenario_file):
         scen_set = ScenarioGenerator.load(args.scenario_file)
@@ -47,16 +61,21 @@ if __name__ == "__main__":
         if args.scenario_file:
             ScenarioGenerator.save(args.scenario_file, scen_set)
 
+    # Ensure n matches the actual number of scenarios loaded/generated
+    args.n = len(scen_set.seeds)
+    print(f"[INFO] Using {args.n} scenarios.")
+
     # 1) Initialize the environment
     # 2) Simulate the scheduling
     obj_values = np.zeros(args.n)
-    for i in tqdm(range(args.n), desc="Simulating scheduling"):         #tqdm for bar visualization
+    for i, seed in enumerate(tqdm(scen_set.seeds, desc="Simulating scheduling")):
+        np.random.seed(seed)  # set scenario
         env = init_main(args)
         schedule = env.agent.get_schedule(env)
-        obj_function = env.simulate_scheduling(schedule, plot_gantt=(i == args.n-1)) # Plot the last simulation
+        last_scenario = (i == args.n - 1)
+        obj_function = env.simulate_scheduling(schedule, plot_gantt=last_scenario)
         obj_values[i] = obj_function
     print(f"Estimated objective function value: {np.mean(obj_values)}")
 
     # 3) Construct the animation
     env.gantt_plotter.construct_animation(args.failure_prob, args.priority_rule)
-
