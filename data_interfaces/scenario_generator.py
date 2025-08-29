@@ -188,9 +188,9 @@ class ScenarioReducer:
           weights (np.ndarray): Probability weights of clusters summing to 1, ordered by descending cluster size.
           assign (np.ndarray): Cluster assignment of each scenario to {0..k-1}.
         """
-        Xs = self.standardize(np.asarray(Xi, float))
-        C = self.pairwise_dist2(Xs, Xs)  # (m,m)
-        medoids, assign = self.kmedoids(C, self.k, rng=self.rng_seed)
+        Xs = self._standardize(np.asarray(Xi, float))
+        C = self._pairwise_dist2(Xs, Xs)  # (m,m)
+        medoids, assign = self._kmedoids(C, self.k, rng=self.rng_seed)
         # weights by cluster mass
         m = len(Xi)
         weights = np.zeros(self.k, float)
