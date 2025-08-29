@@ -69,7 +69,7 @@ def init_main(args: argparse.Namespace) -> ShopFloorSimulation:
     return env
 
 def run(priority_rule=None,failure_prob=None,scenario_file=None,test=False,printed=False,
-        reduction=False,k=None):
+        reduction=False,k=None,e_length=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--priority_rule", type=str, default="edd",                                 
                         choices = ['edd', 'lpt', 'spt', 'wspt', 'atcs', 'msf'],
@@ -99,6 +99,8 @@ def run(priority_rule=None,failure_prob=None,scenario_file=None,test=False,print
         args.use_reduction = reduction
     if k != None and test == True:
         args.k_scenarios = k
+    if e_length != None and test == True:
+        args.embed_length = e_length
 
     if args.scenario_file:
         abs_path = os.path.abspath(args.scenario_file)
