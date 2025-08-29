@@ -137,14 +137,15 @@ class ScenarioReducer:
         rng = np.random.default_rng(seed)
         
         # Generate a binary stream of successes (0) and failures (1)
+        # i.e. if failure prob = 0.1, each number generated will be 1 if > 0.1 (success)
         outcomes = (rng.random(stream_length) < failure_probability).astype(int)
         
         # Build features
-
         # Overall failure rate
         avg_failure_rate = outcomes.mean()
         
         # Standard deviation (variability of failures)
+        # ddof is used to bias correction (1/N-1)
         failure_variability = outcomes.std(ddof=1) if stream_length > 1 else 0.0
         
         # Longest streak of consecutive failures
@@ -190,16 +191,18 @@ class ScenarioReducer:
         """
         Xs = self._standardize(np.asarray(Xi, float))
         C = self._pairwise_dist2(Xs, Xs)  # (m,m)
-        medoids, assign = self._kmedoids(C, self.k, rng=self.rng_seed)
+        medoids, assign = self._kmedoids(C,rng=self.rng_seed)
+
         # weights by cluster mass
-        m = len(Xi)
         weights = np.zeros(self.k, float)
         for j in range(self.k):
             weights[j] = np.mean(assign == j)
+
         # order medoids by weight descending (nice to have)
         order = np.argsort(-weights)
         keep_idx = medoids[order]
         weights = weights[order]
+
         # remap assignments to new order
         remap = {old: new for new, old in enumerate(order)}
         assign = np.array([remap[a] for a in assign], int)
