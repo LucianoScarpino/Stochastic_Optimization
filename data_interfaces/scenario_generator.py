@@ -47,7 +47,7 @@ class ScenarioReducer:
         self.k = int(k)
         self.rng_seed = rng_seed
 
-    def standardize(self,X):
+    def _standardize(self,X):
         """
         Standardizes features to have zero mean and unit variance.
         Avoids division by zero by setting std to 1 where std=0.
@@ -64,7 +64,7 @@ class ScenarioReducer:
         sd[sd == 0.0] = 1.0
         return (X - mu) / sd
 
-    def pairwise_dist2(self,A, B):
+    def _pairwise_dist2(self,A, B):
         """
         Computes pairwise Euclidean distances between two sets of points.
 
@@ -80,7 +80,7 @@ class ScenarioReducer:
         B2 = np.sum(B*B, axis=1, keepdims=True).T
         return np.sqrt(np.maximum(A2 + B2 - 2*A@B.T, 0.0))
 
-    def kmedoids(self,C, iters=20,rng=None):
+    def _kmedoids(self,C, iters=20,rng=None):
         """
         Runs k-medoids clustering on a dissimilarity matrix C.
 
@@ -113,6 +113,67 @@ class ScenarioReducer:
             medoids = new_medoids
         assign = np.argmin(C[:, medoids], axis=1)
         return medoids, assign
+    
+    import numpy as np
+
+    def make_scenario_embedding(seed: int, failure_probability: float, stream_length: int = 2000) -> np.ndarray:
+        """
+        Create a simple embedding (feature vector) for a scenario.
+        
+        Parameters
+        ----------
+        seed : int
+            Random seed that defines the scenario.
+        failure_probability : float
+            Probability that an operation fails.
+        stream_length : int
+            Length of the random sequence (approx. number of operation attempts).
+        
+        Returns
+        -------
+        np.ndarray
+            Feature vector describing the scenario.
+        """
+        rng = np.random.default_rng(seed)
+        
+        # Generate a binary stream of successes (0) and failures (1)
+        outcomes = (rng.random(stream_length) < failure_probability).astype(int)
+        
+        # Build features
+
+        # Overall failure rate
+        avg_failure_rate = outcomes.mean()
+        
+        # Standard deviation (variability of failures)
+        failure_variability = outcomes.std(ddof=1) if stream_length > 1 else 0.0
+        
+        # Longest streak of consecutive failures
+        max_streak = 0
+        current_streak = 0
+        for o in outcomes:
+            if o == 1:
+                current_streak += 1
+                max_streak = max(max_streak, current_streak)
+            else:
+                current_streak = 0
+        
+        # Average distance between failures
+        failure_positions = np.where(outcomes == 1)[0]
+        if len(failure_positions) >= 2:
+            gaps = np.diff(failure_positions)
+            avg_gap = gaps.mean()
+        else:
+            avg_gap = 0.0
+        
+        # Final feature vector
+        embedding = np.array([
+            avg_failure_rate,
+            failure_variability,
+            max_streak,
+            avg_gap
+        ], dtype=float)
+        
+        return embedding
 
     def reduce(self, Xi: np.ndarray):
         """
