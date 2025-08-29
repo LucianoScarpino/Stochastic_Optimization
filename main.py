@@ -50,7 +50,7 @@ def init_main(args: argparse.Namespace) -> ShopFloorSimulation:
     env = ShopFloorSimulation(inst, agent, failure_prob=args.failure_prob)
     return env
 
-def run(priority_rule=None,failure_prob=None,scenario_file=None,test=False):
+def run(priority_rule=None,failure_prob=None,scenario_file=None,test=False,printed=False):
     parser = argparse.ArgumentParser()
     parser.add_argument("--priority_rule", type=str, default="edd",                                 
                         choices = ['edd', 'lpt', 'spt', 'wspt', 'atcs', 'msf'],
@@ -71,30 +71,47 @@ def run(priority_rule=None,failure_prob=None,scenario_file=None,test=False):
     if scenario_file != None and test == True:
         args.scenario_file = scenario_file
 
-    # Check scenario_file name for n consistency
     if args.scenario_file:
-        base = os.path.basename(args.scenario_file)
-        name, ext = os.path.splitext(base)
-        parts = name.split("_")
-        if len(parts) > 1:
-            last_part = parts[-1]
-            if last_part.isdigit():
-                scen_n = int(last_part)
-                if scen_n != args.n:
-                    print(f"[INFO] Overriding --n: using n={scen_n} from scenario file name instead of n={args.n}")
-                    args.n = scen_n
+        abs_path = os.path.abspath(args.scenario_file)
+        if not printed:
+            print('-'*50)
+            print(f"[DEBUG] scenario_file provided: {args.scenario_file} (abs: {abs_path}), exists={os.path.isfile(args.scenario_file)}")
+            print('-'*50)
+    else:
+        if not printed:
+            print('-'*50)
+            print("[DEBUG] no scenario_file provided; will use generator")
+            print('-'*50)
 
     if args.scenario_file and os.path.isfile(args.scenario_file):
+        if not printed:
+            print('-'*50)
+            print("[DEBUG] Loading scenarios from file...")
+            print('-'*50)
         scen_set = ScenarioGenerator.load(args.scenario_file)
     else:
+        if not printed:
+            print('-'*50)
+            print(f"[DEBUG] Generating scenarios with n={args.n}, base_seed={args.base_seed}...")
+            print('-'*50)
         scen_set = ScenarioGenerator(n=args.n, base_seed=args.base_seed).generate()
+
         # Save scenarios if a path was provided (enables reuse across rules for CRN)
         if args.scenario_file:
+            if not printed:
+                print('-'*50)
+                print(f"[DEBUG] Saving generated scenarios to {args.scenario_file}")
+                print('-'*50)
             ScenarioGenerator.save(args.scenario_file, scen_set)
 
     # Ensure n matches the actual number of scenarios loaded/generated
-    args.n = len(scen_set.seeds)
-    print(f"[INFO] Using {args.n} scenarios.")
+    if args.n != len(scen_set.seeds):
+        if not printed:
+            print('-'*50)
+            print(f"[INFO] Overriding --n: using n={len(scen_set.seeds)-1} from scenario file lenght instead of n={args.n}")
+            print('-'*50)
+        args.n = len(scen_set.seeds)
+        
 
     # 1) Initialize the environment
     # 2) Simulate the scheduling
@@ -102,6 +119,18 @@ def run(priority_rule=None,failure_prob=None,scenario_file=None,test=False):
     for i, seed in enumerate(tqdm(scen_set.seeds, desc="Simulating scheduling")):
         np.random.seed(seed)  # set scenario
         env = init_main(args)
+
+        # On the first scenario of this execution, clear previous frames
+        if i == 0:
+            img_dir = getattr(env.gantt_plotter, 'img_dir', None)
+            if img_dir and os.path.isdir(img_dir):
+                for f in os.listdir(img_dir):
+                    if f.endswith('.png'):
+                        try:
+                            os.remove(os.path.join(img_dir, f))
+                        except OSError:
+                            pass
+
         schedule = env.agent.get_schedule(env)
         last_scenario = (i == args.n - 1)
         obj_function = env.simulate_scheduling(schedule, plot_gantt=last_scenario)
@@ -109,12 +138,16 @@ def run(priority_rule=None,failure_prob=None,scenario_file=None,test=False):
 
     # Generate metrics
     mean_obj,std_obj,I_obj = mean_std_ci(obj_values)
+    print('-'*50)
+    print(f'Priority rule: {args.priority_rule}')
+    print(f'Failure probability: {args.failure_prob}')
     print(f"Estimated objective function value: {mean_obj}")
-
+    print('-'*50)
+    
     # 3) Construct the animation
-    env.gantt_plotter.construct_animation(args.failure_prob, args.priority_rule)
-
-    if test == True:
+    if not test:
+        env.gantt_plotter.construct_animation(args.failure_prob, args.priority_rule)
+    else:
         return mean_obj,std_obj,I_obj
 
 if __name__ == "__main__":

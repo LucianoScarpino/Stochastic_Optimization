@@ -41,20 +41,22 @@ def store_results(results,reduction=False):
 
 if __name__ == "__main__":
     # Set test parameters
-    scenario_file = "./data/scenarios/test_scenario_20.json"
+    scenario_file = "./data/scenarios/test_scenario_50.json"
     rules = ['edd', 'lpt', 'spt', 'wspt', 'atcs', 'msf']
     failure_probs = [0.1,0.2,0.3]
     
     # Create combinations for testing
     combinations = generate_combinations(rules,failure_probs)
+    print('-'*50)
+    print(f'Number of combinations to test: {len(combinations)}')
+    print('-'*50)
 
     # Testing
+    printed_info = False # Avoid multiple prints info
     tested = {}
     for comb in combinations:
-        m_obj,std_obj,I_obj = run(comb[0],comb[1],test=True)
-        print('-'*50)
-        print (m_obj)
-        print('-'*50)
+        m_obj,std_obj,I_obj = run(comb[0],comb[1],scenario_file,test=True,print=printed_info)
+        printed_info = True
 
         # Store metrics
         tested[comb] = [m_obj,std_obj,I_obj]
